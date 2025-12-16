@@ -51,69 +51,109 @@ class PreProcessor(ProcessingBase):
         self.class_manager = class_manager
         self.module_manager = module_manager
 
-
+    # jt添加
     def _get_fun_defaults(self, node):
         defaults = {}
-        start = len(node.args.args) - len(node.args.defaults)
-        for cnt, d in enumerate(node.args.defaults, start=start):
-            if not d:
-                continue
-
-            self.visit(d)
-            defaults[node.args.args[cnt].arg] = self.decode_node(d)
-
-        start = len(node.args.kwonlyargs) - len(node.args.kw_defaults)
-        for cnt, d in enumerate(node.args.kw_defaults, start=start):
-            if not d:
-                continue
-            self.visit(d)
-            defaults[node.args.kwonlyargs[cnt].arg] = self.decode_node(d)
-
+        
+        # 处理位置参数默认值
+        if node.args.defaults and node.args.args:
+            # 确保不越界
+            start = max(0, len(node.args.args) - len(node.args.defaults))
+            for i, d in enumerate(node.args.defaults):
+                if not d:
+                    continue
+                self.visit(d)
+                # 计算正确的参数索引
+                arg_index = start + i
+                if arg_index < len(node.args.args):
+                    defaults[node.args.args[arg_index].arg] = self.decode_node(d)
+        
+        # 处理关键字参数默认值
+        if node.args.kw_defaults and node.args.kwonlyargs:
+            start = max(0, len(node.args.kwonlyargs) - len(node.args.kw_defaults))
+            for i, d in enumerate(node.args.kw_defaults):
+                if not d:
+                    continue
+                self.visit(d)
+                arg_index = start + i
+                if arg_index < len(node.args.kwonlyargs):
+                    defaults[node.args.kwonlyargs[arg_index].arg] = self.decode_node(d)
+        
         return defaults
+
+    # def _get_fun_defaults(self, node):
+    #     defaults = {}
+    #     start = len(node.args.args) - len(node.args.defaults)
+    #     for cnt, d in enumerate(node.args.defaults, start=start):
+    #         if not d:
+    #             continue
+
+    #         self.visit(d)
+    #         defaults[node.args.args[cnt].arg] = self.decode_node(d)
+
+    #     start = len(node.args.kwonlyargs) - len(node.args.kw_defaults)
+    #     for cnt, d in enumerate(node.args.kw_defaults, start=start):
+    #         if not d:
+    #             continue
+    #         self.visit(d)
+    #         defaults[node.args.kwonlyargs[cnt].arg] = self.decode_node(d)
+
+    #     return defaults
 
     def analyze_submodule(self, modname):
         super().analyze_submodule(PreProcessor, modname,
             self.import_manager, self.scope_manager, self.def_manager, self.class_manager,
             self.module_manager, modules_analyzed=self.get_modules_analyzed())
 
+    # 在Python中，每个文件都被视为一个模块，模块是代码组织的基本单元。visit_Module 方法是 PreProcessor 类中的一个方法，用于处理模块级别的代码。
     def visit_Module(self, node):
-        def iterate_mod_items(items, const):
+        def iterate_mod_items(items, const):  # 遍历模块中的项（函数/类），创建定义并添加到父作用域
             for item in items:
+                # 获取或创建定义
                 defi = self.def_manager.get(item)
                 if not defi:
                     defi = self.def_manager.create(item, const)
 
+                # # 解析命名空间：将定义的名称拆分成多个部分，并获取最后一个部分作为名称，其余部分作为父命名空间
                 splitted = item.split(".")
                 name = splitted[-1]
                 parentns = ".".join(splitted[:-1])
+                # 将定义添加到父作用域
                 self.scope_manager.get_scope(parentns).add_def(name, defi)
-
+        # 设置当前模块的导入管理器，告诉导入管理器当前正在处理哪个模块，用于后续的导入管理
         self.import_manager.set_current_mod(self.modname, self.filename)
-
+        # 创建模块管理器条目，在 module_manager 中创建一个模块记录，用于后续的模块管理
         mod = self.module_manager.create(self.modname, self.filename)
 
+        # 获取模块的开始和结束行号，用于后续的模块管理
         first = 1
         last = len(self.contents.splitlines())
         if last == 0:
             first = 0
-        mod.add_method(self.modname, first, last)
+        mod.add_method(self.modname, first, last)  # 这里把整个模块当作一个"方法"来记录
 
+        # 初始化模块作用域。获取根作用域，如果根作用域不存在，则创建根作用域
         root_sc = self.scope_manager.get_scope(self.modname)
         if not root_sc:
             # initialize module scopes
+            # 1. 处理模块，生成符号表并遍历进行process，在其中调用create_scope添加到作用域，并生成一个包含函数和类名的字典返回
             items = self.scope_manager.handle_module(self.modname,
                 self.filename, self.contents)
 
+            # 2. 获取刚创建的作用域
             root_sc = self.scope_manager.get_scope(self.modname)
+            # 3. 创建模块根定义。获取模块根定义，如果模块根定义不存在，则创建模块根定义
             root_defi = self.def_manager.get(self.modname)
             if not root_defi:
                 root_defi = self.def_manager.create(self.modname, utils.constants.MOD_DEF)
+            # 4. 将模块定义添加到自身作用域
             root_sc.add_def(self.modname.split(".")[-1], root_defi)
 
             # create function and class defs and add them to their scope
             # we do this here, because scope_manager doesn't have an
             # interface with def_manager, and we want function definitions
             # to have the correct points_to set
+            # 5. 为模块中的函数和类创建定义并添加到作用域
             iterate_mod_items(items["functions"], utils.constants.FUN_DEF)
             iterate_mod_items(items["classes"], utils.constants.CLS_DEF)
 
@@ -123,6 +163,7 @@ class PreProcessor(ProcessingBase):
 
         super().visit_Module(node)
 
+    # 用于处理Python中的import语句和from ... import ...语句
     def visit_Import(self, node, prefix='', level=0):
         """
         For imports of the form
@@ -133,6 +174,7 @@ class PreProcessor(ProcessingBase):
         level is set to a number indicating the number
         of parent directories (e.g. in this case level=1)
         """
+        # 构建完整的导入源名称
         def handle_src_name(name):
             # Get the module name and prepend prefix if necessary
             src_name = name
@@ -170,13 +212,14 @@ class PreProcessor(ProcessingBase):
         #             current_scope.get_def(tgt_name).get_name_pointer().add(defi.get_ns())
 
 
-
         def handle_scopes(imp_name, tgt_name, modname):
             # print('sssshhhhh')
+            # 创建一个指向import定义的新定义。如果定义不存在，则创建定义，并添加到作用域
             def create_def(scope, name, imported_def):
                 # print('ssss')
                 if not name in scope.get_defs():
-                    def_ns = utils.join_ns(scope.get_ns(), name)
+                    def_ns = utils.join_ns(scope.get_ns(), name)   # 当前作用域下的完整命名空间（当前作用域+名称）
+                    # 获取或创建一个定义，指向import的定义
                     defi = self.def_manager.get(def_ns)
                     if not defi:
                         defi = self.def_manager.assign(def_ns, imported_def)
@@ -230,6 +273,16 @@ class PreProcessor(ProcessingBase):
                 continue
 
             fname = self.import_manager.get_filepath(imported_name)
+
+            # print(f"DEBUG visit_Import: Processing import in module {self.modname}, imported_name={imported_name}, fname={fname}")
+            # print(f"DEBUG visit_Import: current_ns = {self.current_ns}")
+            # print(f"DEBUG visit_Import: modules_analyzed = {self.modules_analyzed}")
+            # print(f"DEBUG visit_Import: import_manager.get_mod_dir() = {self.import_manager.get_mod_dir()}")
+            # if fname:
+            #     print(f"DEBUG visit_Import: self.import_manager.get_mod_dir() in fname = {self.import_manager.get_mod_dir() in fname}, not modname in self.modules_analyzed={not imported_name in self.modules_analyzed}")
+            # else:
+            #     print(f"DEBUG visit_Import: fname is None, not imported_name in self.modules_analyzed={not imported_name in self.modules_analyzed}")
+
             if not fname:
                 add_external_def(src_name, tgt_name)
                 continue
@@ -244,6 +297,12 @@ class PreProcessor(ProcessingBase):
         # handle all modules that were not analyzed
         for modname in self.import_manager.get_imports(self.modname):
             fname = self.import_manager.get_filepath(modname)
+            # print('=================')
+            # print(f"DEBUG visit_Import 2: Processing import in module {self.modname}, modname={modname}, fname={fname}")
+            # print(f"DEBUG visit_Import 2: current_ns = {self.current_ns}")
+            # print(f"DEBUG visit_Import 2: modules_analyzed = {self.modules_analyzed}")
+            # print(f"DEBUG visit_Import 2: import_manager.get_mod_dir() = {self.import_manager.get_mod_dir()}")
+            # print(f"DEBUG visit_Import 2: self.import_manager.get_mod_dir() in fname = {(self.import_manager.get_mod_dir() in fname) if fname else 'N/A (fname is None)'}, not modname in self.modules_analyzed={not modname in self.modules_analyzed}")
 
             if not fname:
                 continue
@@ -431,6 +490,6 @@ class PreProcessor(ProcessingBase):
             self.import_manager.set_filepath(self.modname, self.filename)
             # print('preprocessing analyze- function-----{}'.format(self.filename))
 
-    
+        # 解析文件内容为AST，并开始遍历，会根据节点的类型调用相应的visit_方法
         # print('visit file')
         self.visit(ast.parse(self.contents, self.filename))

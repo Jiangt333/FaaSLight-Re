@@ -22,6 +22,7 @@ import sys
 import ast
 import os
 import importlib
+import importlib.abc
 import copy
 
 import utils
@@ -33,8 +34,8 @@ def get_custom_loader(ig_obj):
     """
     class CustomLoader(importlib.abc.SourceLoader):
         def __init__(self, fullname, path):
-            self.fullname = fullname
             self.path = path
+            self.fullname = fullname
 
             ig_obj.create_edge(self.fullname)
             if not ig_obj.get_node(self.fullname):
@@ -51,7 +52,7 @@ def get_custom_loader(ig_obj):
 
 class ImportManager(object):
     def __init__(self):
-        self.import_graph = dict()
+        self. import_graph = dict()
         self.current_module = ""
         self.input_file = ""
         self.mod_dir = None
@@ -201,11 +202,13 @@ class ImportManager(object):
 
     def install_hooks(self):
         loader = get_custom_loader(self)
+        # 保存旧的系统hook，等自定义hook执行完就恢复为旧的hook，避免影响其他模块的导入
         self.old_path_hooks = copy.deepcopy(sys.path_hooks)
         self.old_path = copy.deepcopy(sys.path)
 
         loader_details = loader, importlib.machinery.all_suffixes()
         sys.path_hooks.insert(0, importlib.machinery.FileFinder.path_hook(loader_details))
+        # 将input_pkg插入到sys.path的0位置，这样在import一个包时，会优先去input_pkg中寻找包，而不是去sys.path中寻找包
         sys.path.insert(0, os.path.abspath(self.mod_dir))
 
         self._clear_caches()

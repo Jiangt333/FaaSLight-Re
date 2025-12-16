@@ -7,6 +7,7 @@ from pycg import CallGraphGenerator
 import formats
 
 def main():
+    print("begin call pycg.__main__.py")
     parser = argparse.ArgumentParser()
     parser.add_argument("entry_point",
         nargs="*",
@@ -49,7 +50,6 @@ def main():
         help="Output path",
         default=None
     )
-
     args = parser.parse_args()
     # 核心文件分析
     cg = CallGraphGenerator(args.entry_point, args.package)
@@ -69,10 +69,42 @@ def main():
     else:
         print (json.dumps(formatter.generate()))
 
+# if __name__ == "__main__":
+#     # input_package  = "/home/wenjinfeng/IntergrationTest"
+#     # input_entry_point = "/home/wenjinfeng/IntergrationTest/test.py"
+#     # output_file = "/home/wenjinfeng/IntergrationTest/output.json"
+#     main()
+#     # python3 __main__.py --package /home/wenjinfeng/IntergrationTest /home/wenjinfeng/IntergrationTest/test.py -o /home/wenjinfeng/IntergrationTest/output.json
+
 if __name__ == "__main__":
-    # input_package  = "/home/wenjinfeng/IntergrationTest"
-    # input_entry_point = "/home/wenjinfeng/IntergrationTest/test.py"
-    # output_file = "/home/wenjinfeng/IntergrationTest/output.json"
     
-    main()
-    # python3 __main__.py --package /home/wenjinfeng/IntergrationTest /home/wenjinfeng/IntergrationTest/test.py -o /home/wenjinfeng/IntergrationTest/output.json
+    # main()
+
+    print("=== 直接调用模式 ===")
+    # 获取当前文件所在目录的父目录（FaaSLight_Tool 目录）
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # 上溯两级，得到 FaaSLight 目录
+    parent_dir = os.path.dirname(os.path.dirname(current_dir))  # FaaSLight 目录
+
+    # 构建正确的路径
+    test_package = os.path.join(parent_dir, "Original_app", "app3")
+    test_entry_points = [os.path.join(parent_dir, "Original_app", "app3", "main.py")]
+    test_output = os.path.join(parent_dir, "Original_app", "app3", "output.json")
+
+    # 验证路径是否存在
+    if not os.path.exists(test_entry_points[0]):
+        print(f"❌ 错误: 入口文件不存在 - {test_entry_points[0]}")
+        print("请检查 app3/main.py 文件是否存在")
+        sys.exit(1)
+    
+    # 保存原始命令行参数
+    original_argv = sys.argv.copy()
+    
+    try:
+        # 设置模拟的命令行参数
+        sys.argv = ['pycg', '--package', test_package] + test_entry_points + ['-o', test_output]
+        main()
+        
+    finally:
+        # 恢复原始命令行参数
+        sys.argv = original_argv

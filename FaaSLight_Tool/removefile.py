@@ -40,4 +40,4 @@ if __name__ == "__main__":
     "ignorFile": [".pyc"],
 }
     # a = '.pyc'
-    delFiles(path,assetsDir)
+    delFiles(path, assetsDir)

@@ -22,11 +22,7 @@ def handle_resize(request):
     key_path = "1.jpeg"
 
     # Retrieve the S3 Object
-    s3_connection = boto3.resource('s3',aws_access_key_id="XXXXX",
-                                aws_secret_access_key="XXXXX",
-                                region_name="us-west-1")
     s3_object = s3_connection.Object(bucket_name, key_path)
-
     response = s3_object.get()
 
     # Perform the resize operation
@@ -40,7 +36,6 @@ def handle_resize(request):
     # print(",functioStart:{},".format(tm_st))
     fun_ed = time.time() * 1000
     return ",InitStart:{},".format(init_st)+"InitEnd:{},".format(init_ed)+"functionStart:{},".format(fun_st)+"functionEnd:{},".format(fun_ed)
-
 
     # Finally remove, as the bucket is public and we don't want just anyone dumping the list of our files!
     # s3_object.delete()

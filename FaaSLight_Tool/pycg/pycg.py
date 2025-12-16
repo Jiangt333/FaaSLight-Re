@@ -129,6 +129,7 @@ class CallGraphGenerator(object):
 
     def do_pass(self, cls, install_hooks=False, *args, **kwargs):
         modules_analyzed = set()
+        print('------begin do pass----------')
         for entry_point in self.entry_points:
             
             input_pkg = self.package
@@ -136,21 +137,25 @@ class CallGraphGenerator(object):
             input_mod = self._get_mod_name(entry_point, input_pkg)
             # 要分析的文件的绝对路径
             input_file = os.path.abspath(entry_point)
-            # print('read file as-----{}'.format(input_file))
+            print('read file as-----{}'.format(input_file))
 
             if not input_mod:
                 continue
 
             if not input_pkg:
+                print('input_pkg = os.path.dirname({})'.format(os.path.dirname(input_file)))
                 input_pkg = os.path.dirname(input_file)
 
             if not input_mod in modules_analyzed:
                 if install_hooks:
                     self.import_manager.set_pkg(input_pkg)
+                    # 安装钩子，将import_manager中的sys.path_hooks和sys.path进行备份，并插入新的钩子，将新的钩子插入到sys.path_hooks的0位置，每次执行到import语句时会优先使用自定义的hook
+                    # 自定义的hook不做加载模块的操作，只是记录模块之间的依赖关系
+                    # 将input_pkg插入到sys.path的0位置，这样在import一个包时，会优先去input_pkg中寻找包，而不是去sys.path中寻找包
                     self.import_manager.install_hooks()
 
                 # 处理的各自的方法
-                # print('------modules_analyzed----------{}'.format(modules_analyzed))
+                print('------modules_analyzed----------{}'.format(modules_analyzed))
                 processor = cls(input_file, input_mod,
                                 modules_analyzed=modules_analyzed, *args, **kwargs)
                 
@@ -160,21 +165,22 @@ class CallGraphGenerator(object):
                 # t.join(300)
 
                 processor.analyze()
-                # print('=================')
+                print('=================')
                 modules_analyzed = modules_analyzed.union(processor.get_modules_analyzed())
 
-
+                # 移除自定义hook，恢复为旧的hook，避免影响其他模块的导入
                 if install_hooks:
                     self.remove_import_hooks()
     # 核心分析函数
     def analyze(self):
-        # 预处理
+        # 预处理，只运行一次，语法分析，处理各个模块之间的依赖关系，收集基础定义和语法结构
         self.do_pass(PreProcessor, True,
                 self.import_manager, self.scope_manager, self.def_manager,
                 self.class_manager, self.module_manager)
         self.def_manager.complete_definitions()
+        print("complete_definitions in analyze!")
 
-        # 后处理
+        # 后处理，语义分析（如类型推断、变量解析等），可能需要多次迭代才能得到稳定结果
         while not self.has_converged():
             self.state = self.extract_state()
             self.reset_counters()
