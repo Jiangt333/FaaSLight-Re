@@ -99,7 +99,7 @@ if __name__ == "__main__":
             if name.endswith('.py'):
                 print(os.path.join(root, name))
                 handle_file = ""+os.path.join(root, name)
-                for dir_i in dirset:
+                for dir_i in dirset:    # 扫描器只进入那些“已经被确定为有用”的包里去寻找魔法方法
                     # Convert package notation to file path
                     dir_i = dir_i.replace(".","/")
                     if dir_i in handle_file:

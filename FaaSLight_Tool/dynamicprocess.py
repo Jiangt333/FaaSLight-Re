@@ -31,7 +31,7 @@ def getDynamicContent_new(seedfun_list, path, jsoninput, handler_file, dynamic_f
 
     # Process each handler file to find related functions
     for handler_i in handler_file:
-        use_func = handler_i_hanler(handler_i, use_func,load_dict)
+        use_func = handler_i_hanler(handler_i, use_func, load_dict)
 
     print("add result")
     # Filter out builtin functions
@@ -220,13 +220,13 @@ def seed_func_relation(main_func, load_dict, rel_dir):
 
     for key_i in use_functions:
         temp_key = key_i.split('.')
-        flag, target_file, loc = findfile(rel_dir, temp_key, 0)
+        flag, target_file, loc = findfile(rel_dir, temp_key, 0) # 遍历目前收集到的所有函数名，通过 findfile 去找这些函数属于哪个文件
             
         if flag ==1:
             target_file = target_file.replace(rel_dir+".","")
             pyuse_functions.append(target_file)
     
-    # Extend with dependencies of Python files
+    # Extend with dependencies of Python files-一旦确定了某个函数属于某个文件，它会把该文件的“所有顶层依赖”全部拉进来
     use_functions.extend(extend_func(pyuse_functions,load_dict))
         
     # Remove duplicates
@@ -244,6 +244,10 @@ def seed_func_relation(main_func, load_dict, rel_dir):
 #     flag: 0 for not found, 1 for file found, 2 for __init__ in parent, 3 for directory with __init__
 #     target_file: Path to the found file
 #     loc: Index position in one_package_str
+# Flag 1：找到了对应的 .py 文件。
+# Flag 3：找到了一个文件夹，且该文件夹下有 __init__.py（这是一个 Python 包）。
+# Flag 2：当前路径不存在，但父级目录是一个包（说明目标可能是该包内定义的一个变量或函数）。
+# Flag 0：没找到任何物理对应。
 def findfile(rel_dir, one_package_str, i):
     
     # Construct the path to check

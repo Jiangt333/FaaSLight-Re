@@ -12,6 +12,11 @@ def read_context(fileinput):
 
 # Checks if a file or module exists in the given directory path
 # Returns a flag indicating the type of file found, the file path, and current position index
+# Flag meanings:
+#   0：未找到有效的Python模块	普通目录或文件不存在
+#   1：找到Python模块文件（.py）
+#   2：找到父目录是包的模块（父目录有__init__.py），package/有__init__.py，但子模块不存在
+#   3：找到包的__init__.py文件：package/__init__.py
 def file_exsit(rel_dir, one_package_str, i):
     # Construct file path with the current component
     temp_file = "{}.{}".format(rel_dir, one_package_str[i])
@@ -56,7 +61,7 @@ def get_ast(input_file):
     tree_node = ast.parse(content)
     return tree_node
 
-# Process handler type 1 and 2 - handles specific components within a file
+# Process handler type 1 and 2 - handles specific components within a file，引入了属性扫描，引入了函数体扫描-分析成员级/内部
 def handler12_process(find_file, flag, fun_component, dir_name, py_all):
     # Parse the file into AST
     tree_node = get_ast(find_file)
@@ -195,7 +200,7 @@ def handler12_process(find_file, flag, fun_component, dir_name, py_all):
     
     return add_str   
 
-# Process handler type 3 - handles entire file
+# Process handler type 3 - handles entire file-分析文件级/顶层
 def handler13_process(find_file, flag, dir_name):
     # Parse the file into AST
     tree_node = get_ast(find_file)
@@ -205,7 +210,7 @@ def handler13_process(find_file, flag, dir_name):
     func_attr = {}
     all_variable = []
     
-    # Extract file-level names, attributes, and variables
+    # Extract file-level names, attributes, and variables：找顶层的变量和属性
     function_variable, func_attr, all_variable = get_File_Name(tree_node)
     
     # Extract import statements
@@ -307,7 +312,7 @@ def handler13_process(find_file, flag, dir_name):
     
     return add_str 
 
-# Find attribute usage in imports and track their source
+# Find attribute usage in imports and track their source-为了找出一个属性链（如 np.random.seed）完整指向哪里
 def attr_find_import(attr_i, attr_i_values, module_tmp, fromimport_tmp, as_tmp, level_tmp, find_file, dir_name):
     add_str = [] 
     
@@ -398,7 +403,9 @@ def attr_find_import(attr_i, attr_i_values, module_tmp, fromimport_tmp, as_tmp, 
                                 add_str.append("{}.{}.{}.{}".format(path_str, module_tmp[idx_module], fromimport_tmp[idx_module][idx_from],value))
     return add_str
 
-# Find variable references in classes
+# Find variable references in classes。
+# 核心任务是：当分析器在函数内部发现一个变量名（variable_i）时，它会去检查这个变量是否指向当前文件定义的某个“类”、“类的方法”或“类方法内部的嵌套函数”。如果匹配成功，它会把这个变量名转化成一个完整的、以点号分隔的绝对路径字符串。
+# 该函数的作用是将孤立的局部变量名映射回其在类结构中的完整路径。它支持了代码分析的深度，确保不仅能追踪到文件，还能追踪到文件内部的具体类和方法成员。
 def variable_find_class(variable_i, class_tmp, class_func_tmp, class_func_internel_tmp, flag, find_file, dir_name):
     add_str = [] 
     
@@ -437,10 +444,17 @@ def variable_find_class(variable_i, class_tmp, class_func_tmp, class_func_intern
     return add_str    
 
 # Find variable references in functions
+# 核心作用是：在当前扫描的文件中，判断某个变量名 variable_i 是否代表一个本地定义的函数，并将其转换为对应的全路径符号串。
+# 目标是寻找普通函数（Top-level functions）及其嵌套函数（Nested functions）的引用
 def variable_find_function(variable_i, function_tmp, function_internal_tmp, function_internal_internal_tmp, flag, find_file, dir_name):
     add_str = [] 
     
-    # Check if variable is a function
+    # Check if variable is a function-顶层函数，变量名直接匹配文件中的某个 def 函数名
+    # 场景：你在函数 A 内部调用了同文件下的函数 B。
+    # 结果：生成 模块路径.函数B
+    # Flag 的作用：
+    # Flag 1 (普通 Python 文件)： 使用完整的文件名路径。生成的字符串形如：models.user.User.login。
+    # Flag 2/3 (包 init.py)： 使用 os.path.dirname。因为在包初始化文件中定义的东西，其路径通常直接挂在包名下，不需要包含 __init__ 字符串。
     if variable_i in function_tmp:
         path_str = ''
         if (flag == 3) or (flag == 2):
@@ -449,7 +463,12 @@ def variable_find_function(variable_i, function_tmp, function_internal_tmp, func
             path_str = find_file.replace('.py','').replace(dir_name,"").replace('/','.')
         add_str.append("{}.{}".format(path_str, variable_i))
 
-    # Check nested functions
+    # Check nested functions-一级嵌套函数，变量名是一个定义在其他函数内部的函数
+    # 场景：函数 outer 内部定义了 inner，你引用了 inner。
+    # 结果：生成 模块路径.outer.inner。
+    # Flag 的作用：
+    # Flag 1：代表普通文件。路径包含文件名（如 utils.helper.my_func）。
+    # Flag 2/3：代表 __init__.py。路径只到文件夹为止（因为 __init__ 里的函数可以直接通过包名访问，如 utils.my_func 而不需要 utils.__init__.my_func）。
     for idx, val in enumerate(function_internal_tmp):
         if variable_i in val:
             if (flag == 3) or (flag == 2):
@@ -459,7 +478,9 @@ def variable_find_function(variable_i, function_tmp, function_internal_tmp, func
                     
             add_str.append("{}.{}.{}".format(path_str,function_tmp[idx], variable_i))  
         
-        # Check deeply nested functions
+        # Check deeply nested functions-深层嵌套函数，变量名定义在嵌套函数的嵌套函数中
+        # 场景：三层嵌套结构 outer -> middle -> inner。
+        # 结果：生成 模块路径.outer.middle.inner
         if variable_i in function_internal_internal_tmp[idx]:
             if (flag == 3) or (flag == 2):
                 path_str = os.path.dirname(find_file).replace(dir_name,"").replace('/','.')
@@ -470,7 +491,9 @@ def variable_find_function(variable_i, function_tmp, function_internal_tmp, func
     
     return add_str
 
-# Find variable references in imports
+# Find variable references in imports-负责处理那些不在本文件定义、而是通过 import 引入的外部变量
+# 作用是：当我们在函数里发现一个变量（比如 np 或 getLogger）时，通过查看文件顶层的 import 语句，还原出这个变量背后的真实完整包路径。
+# 由于 Python 的 import 语法非常多样（绝对导入、相对导入、别名导入），这段代码必须处理各种复杂情况。
 def variable_find_import(variable_i, module_tmp, fromimport_tmp, as_tmp, level_tmp, find_file, dir_name):
     add_str = [] 
     
@@ -505,7 +528,7 @@ def variable_find_import(variable_i, module_tmp, fromimport_tmp, as_tmp, level_t
                             add_str.append("{}.{}".format(path_str, fromimport_tmp[idx_module][idx_from]))
                         else:
                             add_str.append("{}.{}.{}".format(path_str, module_tmp[idx_module], fromimport_tmp[idx_module][idx_from]))
-                
+                # 由于静态分析很难在不运行代码的情况下知道 * 代表哪些具体函数，这段代码做了一个简化处理：如果变量名匹配 module_tmp（即包名），则认为有关联
                 elif fromimport_tmp[idx_module][idx_from] == "*":
                     # Wildcard import
                     if module_tmp[idx_module] == variable_i:
@@ -555,7 +578,7 @@ def get_importfrom(tree_node):
     as_tmp = []
     
     for node in ast.walk(tree_node):
-        if isinstance(node, ast.Import):
+        if isinstance(node, ast.Import):    # 处理普通导入：import A, B as C
             # Regular import statement
             module_tmp.append(None)
             level_tmp.append(0)
@@ -567,7 +590,7 @@ def get_importfrom(tree_node):
             importfrom_tmp.append(from_content)
             as_tmp.append(as_content)
 
-        if isinstance(node, ast.ImportFrom):          
+        if isinstance(node, ast.ImportFrom):          # 处理来源导入：from X import Y as Z
             # From import statement
             module_tmp.append(node.module) 
             level_tmp.append(node.level)
@@ -829,8 +852,8 @@ def get_function(tree_node):
 
 # Extract details about a specific function
 def get_certainfunction(tree_node, check_func):
-    other_v = []
-    func_map = {}
+    other_v = []    # 收集函数里出现的“名字”（变量、模块名、参数名等）
+    func_map = {}   # 收集函数里出现的“点号操作”（属性访问或方法调用）
     
     for node in ast.walk(tree_node):
         if isinstance(node, ast.FunctionDef):
@@ -991,6 +1014,7 @@ def get_assign(tree_node):
 
 # Extract top-level names, attributes, and __all__ variables from a file
 def get_File_Name(tree_node):
+    # 1. 初始化全量提取
     # Get all names in the file
     Name_tmp = get_Namelist(tree_node)
     
@@ -1003,7 +1027,8 @@ def get_File_Name(tree_node):
     # Variables and attributes found in functions and classes
     functionclass_variable_tmp = []
     functionclass_func_tmp = {}
-    
+
+    # 2. 识别“非顶级”内容 (遍历 AST)：遍历整个语法树，找出所有不在顶级作用域定义的名称
     for node in ast.walk(tree_node):
         if isinstance(node, ast.FunctionDef):
             # Collect names used in functions
@@ -1023,6 +1048,7 @@ def get_File_Name(tree_node):
                     functionclass_variable_tmp.extend(get_Namelist(k))
                     functionclass_func_tmp = merge_dict(functionclass_func_tmp, get_Attribute_func(k))
 
+    # 3. 在收集完所有函数和类内部的“局部标识符”后，代码开始从第一步获取的“全量列表”中剔除这些局部内容
     # Remove variables defined in functions/classes from top-level names
     if len(functionclass_variable_tmp)>0:
         for i in functionclass_variable_tmp:
@@ -1111,11 +1137,11 @@ def update_output(load_dict, rel_dir, dir_name, py_all, package_name=None):
         add_str = []
 
         # Process the file based on flag type
-        if flag ==2 or (flag ==1 and loc < len(temp_key)-1):
+        if flag ==2 or (flag ==1 and loc < len(temp_key)-1):    # 说明依赖指向的是文件内部的某个成员（如 module.MyClass 或 module.my_func）
             # Process specific component within file
             add_str = handler12_process(find_file, flag, fun_component, dir_name, py_all)
         
-        if flag == 3 or (flag == 1 and loc == len(temp_key)-1):
+        if flag == 3 or (flag == 1 and loc == len(temp_key)-1):     # flag == 3 或依赖直接指向一个文件。说明这个依赖是整个模块的导入。
             # Process whole file
             add_str = handler13_process(find_file, flag, dir_name)
 
@@ -1148,8 +1174,11 @@ def update_output(load_dict, rel_dir, dir_name, py_all, package_name=None):
     return load_dict
 
 # Main function to add information to the dependency graph
+# 从已有的output_file（jsoninput）中读取已有的函数依赖图（load_dict）
+# 对于每个handler_file（即input_entry_point中的每个文件），处理它并更新load_dict
+# 将更新后的load_dict写入到re_FunRel（jsonoutput）中
 def add_info(path, jsoninput, handler_file, moshu_file, jsonoutput, package_name=None):
-    # Get all __all__ variables from Python files
+    # Get all __all__ variables from Python files，找出目录下每个.py文件中的all变量，以正确处理 from module import *，让静态分析工具知道通配符*导入实际导入了什么，避免跟踪私有实现的依赖关系，提供更准确的调用图（因为有all的import *时只会导入all中的内容）
     py_all = get_all_value(path)
 
     dir_name = "{}/".format(path)
@@ -1187,7 +1216,7 @@ def handler_file_handle(handler_i, load_dict, dir_name, py_all, moshu_file, pack
     
     print('key value')
     
-    # Find keys that need to be added
+    # Find keys that need to be added：找出load_dict中所有value里出现，但不在key中的函数，作为add_key
     add_key = update_key(load_dict)
 
     # Add special keys
@@ -1212,7 +1241,7 @@ def handler_file_handle(handler_i, load_dict, dir_name, py_all, moshu_file, pack
         for add_key_i in add_key:
             add_keydict[add_key_i] = []
 
-        # Update with new keys
+        # Update with new keys，即找出这些新key的依赖
         load_dict.update(update_output(add_keydict, rel_dir, dir_name, py_all, package_name))
         
         # Find if there are any more keys to add

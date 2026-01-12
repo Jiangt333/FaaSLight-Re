@@ -1,0 +1,15 @@
+numpy
+numpy._typing
+numpy.array_api
+numpy.compat
+numpy.core
+numpy.distutils
+numpy.f2py
+numpy.lib
+numpy.linalg
+numpy.ma
+numpy.matrixlib
+numpy.polynomial
+numpy.random
+numpy.testing
+numpy.typing

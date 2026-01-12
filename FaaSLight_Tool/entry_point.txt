@@ -1,1 +1,1 @@
-testAPP\main.handler
+main.lambda_handler
