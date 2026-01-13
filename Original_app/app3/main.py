@@ -1,54 +1,60 @@
 import time
-# 记录初始化开始时间
+# 记录整个容器初始化的开始时间
 init_st = time.time() * 1000
 
 import logging
 import numpy as np
 
+# --- 关键修改：定义冷启动标志 ---
+# 只有在容器第一次创建时，这段代码才会执行
+IS_COLD_START = True 
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 logger.info('Loading function')
 
-# 记录初始化结束时间
 init_ed = time.time() * 1000
 
 def lambda_handler(event, context):
+    global IS_COLD_START  # 引用全局变量
+    
     # 记录函数逻辑开始时间
     fun_st = time.time() * 1000
     
+    # 判断启动类型
+    start_type = "Cold Start" if IS_COLD_START else "Warm Start"
+    
+    print(f'Execution Type: {start_type}')
     print('/home/jiangt/FaaSLight-Re/Original_app/app3-dynamic/main.py=lambda_handler=12')
     
-    lib_version = {'numpy': np.__version__}
+    try:
+        lib_version = {'numpy': getattr(np, '__version__', 'Attribute missing')}
+    except Exception as e:
+        lib_version = {'error': str(e)}
+    
     logger.info(lib_version)
     
-    # 记录函数逻辑结束时间
     fun_ed = time.time() * 1000
 
-    # 计算初始化总耗时 (Cold Start 期间的加载时间)
     init_interval = init_ed - init_st
-    # 计算函数实际执行耗时
     fun_interval = fun_ed - fun_st
 
     result = {
-        "InitStart": init_st,
-        "InitEnd": init_ed,
+        "StartType": start_type,
         "InitInterval_ms": init_interval,
-        "FunctionStart": fun_st,
-        "FunctionEnd": fun_ed,
         "FunctionInterval_ms": fun_interval,
-        "TotalInterval_ms": (fun_ed - init_st) # 从进程启动到执行结束的总时间
+        "TotalInterval_ms": (fun_ed - init_st) if IS_COLD_START else fun_interval
     }
     
     logger.info(f"Performance Metrics: {result}")
     
-    return (
-        'InitStart:{},'.format(init_st) + 
-        'InitEnd:{},'.format(init_ed) + 
-        'InitInterval:{:.2f}ms,'.format(init_interval) + 
-        'functionStart:{},'.format(fun_st) + 
-        'functionEnd:{},'.format(fun_ed) + 
-        'functionInterval:{:.2f}ms'.format(fun_interval)
-    )
+    # --- 关键修改：执行一次后将标志置为 False ---
+    # 下一次调用同一个 Lambda 实例时，IS_COLD_START 已经是 False 了
+    IS_COLD_START = False 
 
-# if __name__ == "__main__":
-#     lambda_handler(None, None)
+    return (
+        'StartType:{},'.format(start_type) +
+        'InitInterval:{:.2f}ms,'.format(init_interval) + 
+        'functionInterval:{:.2f}ms,'.format(fun_interval) +
+        'numpy_version:{}'.format(lib_version.get('numpy', 'Error'))
+    )
