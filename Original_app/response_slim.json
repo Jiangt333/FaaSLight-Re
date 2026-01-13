@@ -1,0 +1,1 @@
+{"errorMessage": "module 'numpy' has no attribute 'array'", "errorType": "AttributeError", "requestId": "8a7788d0-cc08-4ade-b420-908236f3c42a", "stackTrace": ["  File \"/var/task/main.py\", line 18, in lambda_handler\n    _ = np.array([])\n"]}

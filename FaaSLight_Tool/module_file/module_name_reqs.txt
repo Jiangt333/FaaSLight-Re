@@ -1,11 +1,8 @@
 custom_funtemplate
-six
 main
-lazy_import
 numpy.libs
 bin
 numpy
-lazy_import.__init__
 numpy._version
 numpy.__config__
 numpy.matlib
