@@ -10,3 +10,5 @@ def lambda_handler(event, context):
     logger.info(lib_version)
     return lib_version
 
+# if __name__ == "__main__":
+#     lambda_handler(None, None)

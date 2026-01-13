@@ -1,7 +1,7 @@
 import json
 import os
 
-def sortresult(fileinput,input_package, fileoutput):
+def sortresult(fileinput, input_package, fileoutput):
     
     # fileinput = "log-numpy-right.log"
     result = []
@@ -17,7 +17,11 @@ def sortresult(fileinput,input_package, fileoutput):
     T_new = []
     
     for line in T:
-        lines = line.split('=')
+        lines = line.split('=')     # 按 '=' 切分日志：[路径, 父级(类), 函数名, 行号]
+        # 路径转换：
+        # 1. .split(".py")[0] -> 去掉后缀
+        # 2. .replace(input_package+"/","") -> 去掉长长的绝对路径前缀
+        # 3. .replace('/','.') -> 将文件夹路径转换成 Python 的点号包路径
         lines[0] = lines[0].split(".py")[0].replace(input_package+"/","").replace('/','.')
         if len(lines)>2:
             if not ".".join(lines[0:len(lines)-1]) in T_new:

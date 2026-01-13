@@ -57,7 +57,7 @@ def getDynamicContent_new(seedfun_list, path, jsoninput, handler_file, dynamic_f
 #   load_dict: Dictionary of function relationships
 # Returns:
 #   Updated list of functions in use
-def handler_i_hanler(handler_i, use_func,load_dict):
+def handler_i_hanler(handler_i, use_func, load_dict):
 
     print("processing---------------{}".format(handler_i))
     
