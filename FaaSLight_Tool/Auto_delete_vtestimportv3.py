@@ -498,16 +498,23 @@ if __name__ == "__main__":
     )
 
     # First pass: Identify all functions and classes
+    # for root, dirs, files in os.walk(path):
+    #     for name in files:
+    #         if name.endswith('.py'):
+    #             handle_file = "" + os.path.join(root, name)
+    #             with open(handle_file, 'r', encoding='utf-8') as f:
+    #                 content = f.read()
+    #             tree = parse(content)
+    #             w = open(handle_file, 'w', encoding='utf-8')
+    #             w.write(tree.as_string())
+    #             w.close()
     for root, dirs, files in os.walk(path):
         for name in files:
             if name.endswith('.py'):
-                handle_file = "" + os.path.join(root, name)
-                with open(handle_file, 'r', encoding='utf-8') as f:
+                h_file = os.path.join(root, name)
+                with open(h_file, 'r', encoding='utf-8') as f:
                     content = f.read()
-                tree = parse(content)
-                w = open(handle_file, 'w', encoding='utf-8')
-                w.write(tree.as_string())
-                w.close()
+                astroid.parse(content) # 只解析，触发 register_transform
    
     # Read list of used functions
     with open(used_functionlist, "r", encoding="utf-8") as f:
