@@ -632,3 +632,7 @@ if __name__ == "__main__":
 
                 # Write transformed code back to file
                 w = open(handle_file, 'w', encoding='utf-8')
+                # jiangt fix: ！！！这里缺失了 
+                w.write(tree.as_string())
+                # jiangt fix: ！！！这里缺失了 
+                # w.close()
